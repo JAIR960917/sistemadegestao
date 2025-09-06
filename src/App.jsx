@@ -2,275 +2,573 @@ import React from "react";
 import jsPDF from "jspdf";
 
 function App() {
-  const [activeTab, setActiveTab] = React.useState("client");
-  const [currentUser, setCurrentUser] = React.useState("client"); // client ou admin
+  // Estados de autenticação
+  const [loggedUser, setLoggedUser] = React.useState(null);
+  const [loginData, setLoginData] = React.useState({ email: "", senha: "" });
+  const [loginError, setLoginError] = React.useState("");
 
-  // --------------------------
-  // Estado de Configurações do Sistema
-  // --------------------------
+  const [activeTab, setActiveTab] = React.useState("shop");
+
+  // Configurações do sistema
   const [systemConfig, setSystemConfig] = React.useState({
     name: "Sistema de Gestão",
-    primaryColor: "#2563eb", // azul
-    secondaryColor: "#10b981", // verde
+    primaryColor: "#2563eb",
+    secondaryColor: "#10b981",
     logo: null,
     favicon: null,
   });
 
-  // --------------------------
-  // Estados de Dados
-  // --------------------------
+  // Estados principais - USUÁRIOS AGORA COM SENHA
   const [users, setUsers] = React.useState([
-    { id: 1, nome: "João Silva", email: "joao@email.com", tipo: "cliente" },
-    { id: 2, nome: "Maria Santos", email: "maria@email.com", tipo: "admin" },
+    { id: 1, nome: "João Silva", email: "joao@email.com", senha: "123456", tipo: "cliente" },
+    { id: 2, nome: "Admin Sistema", email: "admin@email.com", senha: "admin123", tipo: "admin" },
+    { id: 3, nome: "Pedro Costa", email: "pedro@email.com", senha: "pedro123", tipo: "cliente" },
+    { id: 4, nome: "Maria Santos", email: "maria@email.com", senha: "maria123", tipo: "cliente" },
   ]);
 
   const [products, setProducts] = React.useState([
-    { id: 1, nome: "Notebook Dell", preco: 2500, categoria: "Eletrônicos" },
-    { id: 2, nome: "Mouse Gamer", preco: 150, categoria: "Acessórios" },
+    { id: 1, nome: "Notebook Dell", preco: 2500, categoria: "Eletrônicos", estoque: 10 },
+    { id: 2, nome: "Mouse Gamer", preco: 150, categoria: "Acessórios", estoque: 25 },
+    { id: 3, nome: "Teclado Mecânico", preco: 300, categoria: "Acessórios", estoque: 15 },
+    { id: 4, nome: "Monitor 24\"", preco: 800, categoria: "Eletrônicos", estoque: 8 },
   ]);
 
   const [orders, setOrders] = React.useState([
     {
       id: 1,
       cliente: "João Silva",
+      clienteEmail: "joao@email.com",
       status: "Pendente",
-      total: 250,
-      data: "2024-01-15",
+      total: 2650,
+      data: "2025-09-01",
       produtos: [
-        { nome: "Placa de vídeo", preco: 150 },
-        { nome: "Fonte 500W", preco: 100 },
+        { nome: "Notebook Dell", preco: 2500, quantidade: 1 },
+        { nome: "Mouse Gamer", preco: 150, quantidade: 1 },
       ],
     },
     {
       id: 2,
-      cliente: "Maria Santos",
-      status: "Concluído",
-      total: 400,
-      data: "2024-01-10",
-      produtos: [{ nome: "Notebook", preco: 400 }],
+      cliente: "Pedro Costa",
+      clienteEmail: "pedro@email.com",
+      status: "Aceito",
+      total: 1100,
+      data: "2025-09-02",
+      produtos: [
+        { nome: "Monitor 24\"", preco: 800, quantidade: 1 },
+        { nome: "Teclado Mecânico", preco: 300, quantidade: 1 },
+      ],
     },
   ]);
 
   const [services, setServices] = React.useState([
-    { id: 1, nome: "Manutenção", descricao: "Serviço de manutenção geral", valor: 100 },
-    { id: 2, nome: "Instalação", descricao: "Instalação de software", valor: 50 },
+    { id: 1, nome: "Formatação Completa", descricao: "Formatação e instalação do Windows", valor: 100 },
+    { id: 2, nome: "Limpeza Interna", descricao: "Limpeza completa do hardware", valor: 80 },
+    { id: 3, nome: "Upgrade de Memória", descricao: "Instalação de memória RAM", valor: 50 },
+    { id: 4, nome: "Backup de Dados", descricao: "Backup completo dos arquivos", valor: 60 },
   ]);
 
   const [serviceRequests, setServiceRequests] = React.useState([
     {
       id: 1,
       cliente: "João Silva",
-      servico: "Manutenção",
+      clienteEmail: "joao@email.com",
+      servico: "Formatação Completa",
       status: "Pendente",
-      data: "2024-01-20",
-      descricao: "Manutenção preventiva do sistema",
+      data: "2025-09-02",
+      descricao: "Notebook Dell com vírus, precisa formatar",
       valor: 100,
+      dataAgendamento: null,
+    },
+    {
+      id: 2,
+      cliente: "Pedro Costa",
+      clienteEmail: "pedro@email.com",
+      servico: "Limpeza Interna",
+      status: "Aceito",
+      data: "2025-09-01",
+      descricao: "PC desktop fazendo muito barulho",
+      valor: 80,
+      dataAgendamento: "2025-09-10",
     },
   ]);
 
   const [cart, setCart] = React.useState([]);
 
-  // -----------------------
-  // Atualizar Favicon
-  // -----------------------
+  // Estados para modais
+  const [showOrderModal, setShowOrderModal] = React.useState(false);
+  const [selectedOrder, setSelectedOrder] = React.useState(null);
+  const [showRequestModal, setShowRequestModal] = React.useState(false);
+  const [selectedRequest, setSelectedRequest] = React.useState(null);
+
+  // Estados para formulários
+  const [editingProduct, setEditingProduct] = React.useState(null);
+  const [newUser, setNewUser] = React.useState({ nome: "", email: "", senha: "", tipo: "cliente" });
+  const [newProduct, setNewProduct] = React.useState({ nome: "", preco: "", categoria: "", estoque: "" });
+  const [newService, setNewService] = React.useState({ nome: "", descricao: "", valor: "" });
+
+  // Funções de autenticação
+  const login = () => {
+    setLoginError("");
+    
+    if (!loginData.email || !loginData.senha) {
+      setLoginError("Por favor, preencha email e senha!");
+      return;
+    }
+
+    const user = users.find(u => 
+      u.email.toLowerCase() === loginData.email.toLowerCase().trim() && 
+      u.senha === loginData.senha
+    );
+
+    if (user) {
+      setLoggedUser(user);
+      setLoginData({ email: "", senha: "" });
+      setActiveTab(user.tipo === "admin" ? "users" : "shop");
+    } else {
+      setLoginError("Email ou senha incorretos!");
+    }
+  };
+
+  const logout = () => {
+    setLoggedUser(null);
+    setLoginData({ email: "", senha: "" });
+    setLoginError("");
+    setActiveTab("shop");
+  };
+
+  // Favicon dinâmico
   React.useEffect(() => {
     if (systemConfig.favicon) {
-      const link =
-        document.querySelector("link[rel='icon']") ||
-        document.createElement("link");
+      const link = document.querySelector("link[rel='icon']") || document.createElement("link");
       link.rel = "icon";
       link.href = systemConfig.favicon;
       document.head.appendChild(link);
     }
   }, [systemConfig.favicon]);
 
-  // -----------------------
-  // Gerar Relatório PDF
-  // -----------------------
+  // Cores dinâmicas
+  React.useEffect(() => {
+    document.documentElement.style.setProperty("--primary-color", systemConfig.primaryColor);
+    document.documentElement.style.setProperty("--secondary-color", systemConfig.secondaryColor);
+  }, [systemConfig.primaryColor, systemConfig.secondaryColor]);
+
+  // Funções CRUD - Usuários (AGORA COM SENHA)
+  const addUser = () => {
+    if (!newUser.nome || !newUser.email || !newUser.senha) {
+      alert("Por favor, preencha todos os campos!");
+      return;
+    }
+    
+    // Verificar se email já existe
+    if (users.find(u => u.email.toLowerCase() === newUser.email.toLowerCase())) {
+      alert("Este email já está cadastrado!");
+      return;
+    }
+
+    setUsers([...users, { ...newUser, id: Date.now() }]);
+    setNewUser({ nome: "", email: "", senha: "", tipo: "cliente" });
+  };
+
+  const deleteUser = (id) => {
+    setUsers(users.filter(u => u.id !== id));
+  };
+
+  // Funções CRUD - Produtos
+  const addProduct = () => {
+    if (!newProduct.nome || !newProduct.preco) return;
+    setProducts([...products, { 
+      ...newProduct, 
+      id: Date.now(), 
+      preco: parseFloat(newProduct.preco),
+      estoque: parseInt(newProduct.estoque) || 0
+    }]);
+    setNewProduct({ nome: "", preco: "", categoria: "", estoque: "" });
+  };
+
+  const updateProduct = (id, updatedProduct) => {
+    setProducts(products.map(p => p.id === id ? { ...p, ...updatedProduct } : p));
+    setEditingProduct(null);
+  };
+
+  const deleteProduct = (id) => {
+    setProducts(products.filter(p => p.id !== id));
+  };
+
+  // Funções CRUD - Serviços
+  const addService = () => {
+    if (!newService.nome || !newService.valor) return;
+    setServices([...services, { 
+      ...newService, 
+      id: Date.now(), 
+      valor: parseFloat(newService.valor)
+    }]);
+    setNewService({ nome: "", descricao: "", valor: "" });
+  };
+
+  const deleteService = (id) => {
+    setServices(services.filter(s => s.id !== id));
+  };
+
+  // Funções do carrinho
+  const addToCart = (product) => {
+    setCart([...cart, product]);
+  };
+
+  const removeFromCart = (index) => {
+    setCart(cart.filter((_, i) => i !== index));
+  };
+
+  const checkout = () => {
+    if (cart.length === 0) return;
+    const total = cart.reduce((sum, item) => sum + item.preco, 0);
+    const newOrder = {
+      id: Date.now(),
+      cliente: loggedUser.nome,
+      clienteEmail: loggedUser.email,
+      status: "Pendente",
+      total,
+      data: new Date().toISOString().split('T')[0],
+      produtos: cart.map(item => ({ ...item, quantidade: 1 }))
+    };
+    setOrders([...orders, newOrder]);
+    setCart([]);
+    alert("Pedido realizado com sucesso!");
+  };
+
+  // Relatório PDF
   const generateReport = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text(systemConfig.name + " - Relatório Completo", 14, 20);
-
-    let y = 30;
-
-    // Seção Pedidos
+    
+    let y = 35;
+    
+    // Resumo geral
     doc.setFontSize(14);
-    doc.text("📦 Pedidos de Produtos", 14, y);
-    y += 8;
+    doc.text("📊 RESUMO GERAL", 14, y);
+    y += 10;
+    
+    doc.setFontSize(11);
+    doc.text(`Total de Usuários: ${users.length}`, 14, y);
+    y += 6;
+    doc.text(`Total de Produtos: ${products.length}`, 14, y);
+    y += 6;
+    doc.text(`Total de Pedidos: ${orders.length}`, 14, y);
+    y += 6;
+    doc.text(`Total de Serviços: ${services.length}`, 14, y);
+    y += 6;
+    doc.text(`Total de Solicitações: ${serviceRequests.length}`, 14, y);
+    y += 15;
+
+    // Pedidos detalhados
+    doc.setFontSize(14);
+    doc.text("📦 PEDIDOS DETALHADOS", 14, y);
+    y += 10;
 
     let totalPedidos = 0;
-    orders.forEach((o, i) => {
-      doc.setFontSize(11);
-      doc.text(
-        `${i + 1}. Cliente: ${o.cliente} | Status: ${o.status} | Data: ${o.data} | Total: R$ ${o.total}`,
-        14,
-        y
-      );
-      y += 6;
-      o.produtos.forEach((p) => {
-        doc.text(`   • ${p.nome} - R$ ${p.preco}`, 20, y);
-        y += 5;
+    orders.forEach((order) => {
+      doc.setFontSize(10);
+      doc.text(`Pedido #${order.id} - ${order.cliente}`, 14, y);
+      y += 5;
+      doc.text(`Data: ${order.data} | Status: ${order.status} | Total: R$ ${order.total}`, 20, y);
+      y += 5;
+      
+      order.produtos.forEach((produto) => {
+        doc.text(`  • ${produto.nome} - R$ ${produto.preco} (Qtd: ${produto.quantidade})`, 25, y);
+        y += 4;
       });
-      totalPedidos += o.total;
+      
+      totalPedidos += order.total;
       y += 3;
+      
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
     });
 
-    y += 5;
-    doc.setFontSize(12);
-    doc.text(`💰 Total em Pedidos: R$ ${totalPedidos}`, 14, y);
-
-    // Seção Serviços Realizados
-    y += 15;
-    doc.setFontSize(14);
-    doc.text("🛠️ Serviços Realizados", 14, y);
-    y += 8;
-
-    let totalServicos = 0;
-    serviceRequests
-      .filter(s => s.status === "Aceito")
-      .forEach((s, i) => {
-        doc.setFontSize(11);
-        doc.text(
-          `${i + 1}. Cliente: ${s.cliente} | Serviço: ${s.servico} | Data: ${s.data} | Valor: R$ ${s.valor}`,
-          14,
-          y
-        );
-        y += 6;
-        doc.text(`   Descrição: ${s.descricao}`, 20, y);
-        y += 6;
-        totalServicos += s.valor;
-      });
-
-    y += 5;
-    doc.setFontSize(12);
-    doc.text(`💰 Total em Serviços: R$ ${totalServicos}`, 14, y);
-
-    // Total Geral
     y += 10;
     doc.setFontSize(14);
-    doc.text(`🏆 TOTAL GERAL: R$ ${totalPedidos + totalServicos}`, 14, y);
+    doc.text("🛠 SERVIÇOS REALIZADOS", 14, y);
+    y += 10;
 
-    doc.save(`${systemConfig.name.replace(/\s+/g, '_')}_relatorio.pdf`);
+    let totalServicos = 0;
+    serviceRequests.filter(s => s.status === "Aceito").forEach((request) => {
+      doc.setFontSize(10);
+      doc.text(`Serviço #${request.id} - ${request.cliente}`, 14, y);
+      y += 5;
+      doc.text(`Serviço: ${request.servico} | Valor: R$ ${request.valor}`, 20, y);
+      y += 5;
+      doc.text(`Data: ${request.data} | Agendamento: ${request.dataAgendamento || 'N/A'}`, 20, y);
+      y += 5;
+      doc.text(`Descrição: ${request.descricao}`, 20, y);
+      y += 8;
+      
+      totalServicos += request.valor;
+      
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+    });
+
+    // Totais finais
+    y += 10;
+    doc.setFontSize(12);
+    doc.text(`💰 TOTAL PEDIDOS: R$ ${totalPedidos.toFixed(2)}`, 14, y);
+    y += 8;
+    doc.text(`💰 TOTAL SERVIÇOS: R$ ${totalServicos.toFixed(2)}`, 14, y);
+    y += 8;
+    doc.setFontSize(14);
+    doc.text(`🏆 FATURAMENTO TOTAL: R$ ${(totalPedidos + totalServicos).toFixed(2)}`, 14, y);
+
+    doc.save(`relatorio-${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  // -----------------------
-  // RENDER APP
-  // -----------------------
+  // TELA DE LOGIN
+  if (!loggedUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+        <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">🔐 Login</h1>
+            <p className="text-gray-600">{systemConfig.name}</p>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                placeholder="Digite seu email"
+                value={loginData.email}
+                onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                className="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onKeyPress={(e) => e.key === 'Enter' && login()}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+              <input
+                type="password"
+                placeholder="Digite sua senha"
+                value={loginData.senha}
+                onChange={(e) => setLoginData({ ...loginData, senha: e.target.value })}
+                className="w-full border border-gray-300 px-4 py-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onKeyPress={(e) => e.key === 'Enter' && login()}
+              />
+            </div>
+            
+            {loginError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                ❌ {loginError}
+              </div>
+            )}
+            
+            <button
+              onClick={login}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Entrar
+            </button>
+          </div>
+          
+          {/* Usuários de teste */}
+          <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+            <h4 className="font-medium text-gray-700 mb-2">👥 Usuários de Teste:</h4>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p><strong>Admin:</strong> admin@email.com / admin123</p>
+              <p><strong>Cliente:</strong> joao@email.com / 123456</p>
+              <p><strong>Cliente:</strong> pedro@email.com / pedro123</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ backgroundColor: "#f3f4f6", minHeight: "100vh" }}>
-      {/* HEADER com Logo, Nome e cor configurável */}
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
       <header
-        className="flex items-center justify-between px-6 py-3 shadow"
+        className="flex justify-between items-center px-6 py-4 shadow-md"
         style={{ backgroundColor: systemConfig.primaryColor, color: "white" }}
       >
         <div className="flex items-center">
           {systemConfig.logo && (
-            <img src={systemConfig.logo} alt="Logo" className="h-10 mr-3" />
+            <img src={systemConfig.logo} alt="Logo" className="h-10 mr-3 rounded" />
           )}
-          <h1 className="text-xl font-bold">{systemConfig.name}</h1>
+          <div>
+            <h1 className="text-2xl font-bold">{systemConfig.name}</h1>
+            <p className="text-sm opacity-90">Bem-vindo, {loggedUser.nome}!</p>
+          </div>
         </div>
-        <div className="flex items-center gap-4">
-          <span>Usuário: {currentUser === "client" ? "Cliente" : "Admin"}</span>
+        <div className="flex items-center gap-3">
+          <span className={`px-3 py-1 rounded-full text-sm ${
+            loggedUser.tipo === "admin" ? "bg-purple-500" : "bg-green-500"
+          }`}>
+            {loggedUser.tipo === "admin" ? "👑 Admin" : "👤 Cliente"}
+          </span>
           <button
-            onClick={() => setCurrentUser(currentUser === "client" ? "admin" : "client")}
-            className="px-3 py-1 bg-white text-black rounded"
+            onClick={logout}
+            className="bg-white text-black px-4 py-2 rounded hover:bg-gray-100 transition-colors"
           >
-            Trocar para {currentUser === "client" ? "Admin" : "Cliente"}
+            🚪 Sair
           </button>
         </div>
       </header>
 
-      {/* MENU */}
+      {/* Navigation */}
       <nav
-        className="flex gap-4 px-6 py-3 shadow"
+        className="flex gap-6 px-6 py-3 shadow-sm"
         style={{ backgroundColor: systemConfig.secondaryColor }}
       >
-        {currentUser === "client" ? (
+        {loggedUser.tipo === "cliente" ? (
           <>
-            <button onClick={() => setActiveTab("shop")} className="text-white">
-              🛍️ Loja
+            <button 
+              onClick={() => setActiveTab("shop")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "shop" ? "bg-black bg-opacity-20" : ""}`}
+            >
+              🛍 Loja
             </button>
-            <button onClick={() => setActiveTab("orders")} className="text-white">
+            <button 
+              onClick={() => setActiveTab("orders")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "orders" ? "bg-black bg-opacity-20" : ""}`}
+            >
               📦 Meus Pedidos
             </button>
-            <button onClick={() => setActiveTab("service-requests")} className="text-white">
-              🛠️ Meus Serviços
+            <button 
+              onClick={() => setActiveTab("requests")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "requests" ? "bg-black bg-opacity-20" : ""}`}
+            >
+              🛠 Solicitações
             </button>
           </>
         ) : (
           <>
-            <button onClick={() => setActiveTab("users")} className="text-white">
+            <button 
+              onClick={() => setActiveTab("users")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "users" ? "bg-black bg-opacity-20" : ""}`}
+            >
               👥 Usuários
             </button>
-            <button onClick={() => setActiveTab("products")} className="text-white">
+            <button 
+              onClick={() => setActiveTab("products")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "products" ? "bg-black bg-opacity-20" : ""}`}
+            >
               📦 Produtos
             </button>
-            <button onClick={() => setActiveTab("admin-orders")} className="text-white">
+            <button 
+              onClick={() => setActiveTab("adminOrders")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "adminOrders" ? "bg-black bg-opacity-20" : ""}`}
+            >
               📋 Pedidos
             </button>
-            <button onClick={() => setActiveTab("services")} className="text-white">
-              🛠️ Serviços
+            <button 
+              onClick={() => setActiveTab("services")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "services" ? "bg-black bg-opacity-20" : ""}`}
+            >
+              🛠 Serviços
             </button>
-            <button onClick={() => setActiveTab("requests")} className="text-white">
+            <button 
+              onClick={() => setActiveTab("adminRequests")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "adminRequests" ? "bg-black bg-opacity-20" : ""}`}
+            >
               📝 Solicitações
             </button>
-            <button onClick={() => setActiveTab("config")} className="text-white">
-              ⚙️ Configurações
+            <button 
+              onClick={() => setActiveTab("config")} 
+              className={`text-white px-3 py-1 rounded ${activeTab === "config" ? "bg-black bg-opacity-20" : ""}`}
+            >
+              ⚙ Configurações
             </button>
-            <button onClick={generateReport} className="text-white">
+            <button 
+              onClick={generateReport} 
+              className="text-white px-3 py-1 rounded bg-yellow-600 hover:bg-yellow-700"
+            >
               📄 Relatório
             </button>
           </>
         )}
       </nav>
 
-      {/* CONTEÚDO */}
+      {/* Main Content */}
       <main className="p-6">
-        {currentUser === "client" ? (
+        {loggedUser.tipo === "cliente" ? (
           <>
             {activeTab === "shop" && (
-              <ClientShop
-                products={products}
-                cart={cart}
-                setCart={setCart}
-                theme={systemConfig}
+              <ClientShop 
+                products={products} 
+                cart={cart} 
+                addToCart={addToCart}
+                removeFromCart={removeFromCart}
+                checkout={checkout}
               />
             )}
             {activeTab === "orders" && (
-              <ClientOrders
-                orders={orders.filter(o => o.cliente === "João Silva")}
+              <ClientOrders 
+                orders={orders.filter(o => o.clienteEmail === loggedUser.email)} 
                 setOrders={setOrders}
-                theme={systemConfig}
+                setShowOrderModal={setShowOrderModal}
+                setSelectedOrder={setSelectedOrder}
               />
             )}
-            {activeTab === "service-requests" && (
-              <ClientServiceRequests
-                serviceRequests={serviceRequests.filter(s => s.cliente === "João Silva")}
-                setServiceRequests={setServiceRequests}
+            {activeTab === "requests" && (
+              <ClientRequests
+                requests={serviceRequests.filter(r => r.clienteEmail === loggedUser.email)}
+                setRequests={setServiceRequests}
                 services={services}
-                theme={systemConfig}
+                loggedUser={loggedUser}
               />
             )}
           </>
         ) : (
           <>
             {activeTab === "users" && (
-              <AdminUsers users={users} setUsers={setUsers} />
+              <AdminUsers 
+                users={users} 
+                newUser={newUser}
+                setNewUser={setNewUser}
+                addUser={addUser}
+                deleteUser={deleteUser}
+              />
             )}
             {activeTab === "products" && (
-              <AdminProducts products={products} setProducts={setProducts} />
+              <AdminProducts 
+                products={products}
+                newProduct={newProduct}
+                setNewProduct={setNewProduct}
+                addProduct={addProduct}
+                deleteProduct={deleteProduct}
+                editingProduct={editingProduct}
+                setEditingProduct={setEditingProduct}
+                updateProduct={updateProduct}
+              />
             )}
-            {activeTab === "admin-orders" && (
-              <AdminOrders orders={orders} setOrders={setOrders} />
+            {activeTab === "adminOrders" && (
+              <AdminOrders 
+                orders={orders} 
+                setOrders={setOrders}
+                setShowOrderModal={setShowOrderModal}
+                setSelectedOrder={setSelectedOrder}
+              />
             )}
             {activeTab === "services" && (
-              <AdminServices services={services} setServices={setServices} />
+              <AdminServices 
+                services={services}
+                newService={newService}
+                setNewService={setNewService}
+                addService={addService}
+                deleteService={deleteService}
+              />
             )}
-            {activeTab === "requests" && (
+            {activeTab === "adminRequests" && (
               <AdminRequests
                 serviceRequests={serviceRequests}
                 setServiceRequests={setServiceRequests}
+                setShowRequestModal={setShowRequestModal}
+                setSelectedRequest={setSelectedRequest}
               />
             )}
             {activeTab === "config" && (
@@ -282,412 +580,322 @@ function App() {
           </>
         )}
       </main>
+
+      {/* Modals */}
+      {showOrderModal && selectedOrder && (
+        <OrderModal 
+          order={selectedOrder} 
+          onClose={() => setShowOrderModal(false)} 
+        />
+      )}
+      
+      {showRequestModal && selectedRequest && (
+        <RequestModal 
+          request={selectedRequest} 
+          onClose={() => setShowRequestModal(false)} 
+        />
+      )}
     </div>
   );
 }
 
-// =============================
-// CLIENT - LOJA
-// =============================
-const ClientShop = ({ products, cart, setCart, theme }) => {
-  const addToCart = (product) => {
-    setCart(prev => [...prev, product]);
-  };
-
-  const checkout = () => {
-    if (cart.length === 0) {
-      alert("Carrinho vazio!");
-      return;
-    }
-    alert(`Pedido realizado! Total: R$ ${cart.reduce((sum, p) => sum + p.preco, 0)}`);
-    setCart([]);
-  };
-
-  return (
-    <div>
-      <h2 className="text-xl font-bold mb-4" style={{ color: theme.primaryColor }}>
-        🛍️ Loja - Produtos Disponíveis
-      </h2>
-      
-      <div className="mb-4 p-4 bg-white rounded shadow">
-        <h3 className="font-bold">🛒 Carrinho ({cart.length} itens)</h3>
-        <p>Total: R$ {cart.reduce((sum, p) => sum + p.preco, 0)}</p>
-        <button
-          onClick={checkout}
-          style={{ backgroundColor: theme.secondaryColor }}
-          className="mt-2 px-4 py-2 text-white rounded"
-        >
-          Finalizar Compra
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {products.map(product => (
-          <div key={product.id} className="bg-white p-4 rounded shadow">
-            <h3 className="font-bold">{product.nome}</h3>
+// Componentes Client
+const ClientShop = ({ products, cart, addToCart, removeFromCart, checkout }) => (
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="lg:col-span-2">
+      <h2 className="text-2xl font-bold mb-4">🛍 Loja</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {products.map((product) => (
+          <div key={product.id} className="bg-white p-4 rounded-lg shadow">
+            <h3 className="font-bold text-lg">{product.nome}</h3>
             <p className="text-gray-600">{product.categoria}</p>
-            <p className="text-lg font-bold">R$ {product.preco}</p>
+            <p className="text-2xl font-bold text-green-600">R$ {product.preco}</p>
+            <p className="text-sm text-gray-500">Estoque: {product.estoque}</p>
             <button
               onClick={() => addToCart(product)}
-              style={{ backgroundColor: theme.primaryColor }}
-              className="mt-2 px-4 py-2 text-white rounded"
+              disabled={product.estoque === 0}
+              className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
             >
-              Adicionar ao Carrinho
+              {product.estoque === 0 ? "Sem Estoque" : "Adicionar ao Carrinho"}
             </button>
           </div>
         ))}
       </div>
     </div>
-  );
-};
+    
+    <div className="bg-white p-4 rounded-lg shadow h-fit">
+      <h3 className="text-xl font-bold mb-4">🛒 Carrinho</h3>
+      {cart.length === 0 ? (
+        <p className="text-gray-500">Carrinho vazio</p>
+      ) : (
+        <>
+          {cart.map((item, index) => (
+            <div key={index} className="flex justify-between items-center mb-2">
+              <span>{item.nome}</span>
+              <div className="flex items-center gap-2">
+                <span>R$ {item.preco}</span>
+                <button
+                  onClick={() => removeFromCart(index)}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  ❌
+                </button>
+              </div>
+            </div>
+          ))}
+          <hr className="my-3" />
+          <div className="flex justify-between font-bold text-lg">
+            <span>Total:</span>
+            <span>R$ {cart.reduce((sum, item) => sum + item.preco, 0)}</span>
+          </div>
+          <button
+            onClick={checkout}
+            className="w-full mt-3 bg-green-500 text-white py-2 rounded hover:bg-green-600"
+          >
+            Finalizar Compra
+          </button>
+        </>
+      )}
+    </div>
+  </div>
+);
 
-// =============================
-// CLIENT - PEDIDOS
-// =============================
-const ClientOrders = ({ orders, setOrders, theme }) => {
-  const [selectedOrder, setSelectedOrder] = React.useState(null);
-
-  const cancelarPedido = (id) => {
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === id ? { ...order, status: "Cancelado" } : order
-      )
-    );
-    setSelectedOrder(null);
-  };
-
-  return (
-    <div>
-      <h2 className="text-xl font-bold mb-4" style={{ color: theme.primaryColor }}>
-        📦 Meus Pedidos
-      </h2>
-
-      <table className="min-w-full bg-white rounded shadow">
-        <thead style={{ backgroundColor: theme.secondaryColor, color: "white" }}>
+const ClientOrders = ({ orders, setOrders, setShowOrderModal, setSelectedOrder }) => (
+  <div>
+    <h2 className="text-2xl font-bold mb-4">📦 Meus Pedidos</h2>
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <table className="w-full">
+        <thead className="bg-gray-50">
           <tr>
-            <th className="px-4 py-2">ID</th>
-            <th className="px-4 py-2">Data</th>
-            <th className="px-4 py-2">Total</th>
-            <th className="px-4 py-2">Status</th>
-            <th className="px-4 py-2">Ação</th>
+            <th className="px-4 py-3 text-left">Pedido</th>
+            <th className="px-4 py-3 text-left">Data</th>
+            <th className="px-4 py-3 text-left">Status</th>
+            <th className="px-4 py-3 text-left">Total</th>
+            <th className="px-4 py-3 text-left">Ações</th>
           </tr>
         </thead>
         <tbody>
           {orders.map((order) => (
-            <tr key={order.id} className="border-b">
-              <td className="px-4 py-2">{order.id}</td>
-              <td className="px-4 py-2">{order.data}</td>
-              <td className="px-4 py-2">R$ {order.total}</td>
-              <td className="px-4 py-2">{order.status}</td>
-              <td className="px-4 py-2">
+            <tr key={order.id} className="border-t">
+              <td className="px-4 py-3">#{order.id}</td>
+              <td className="px-4 py-3">{order.data}</td>
+              <td className="px-4 py-3">
+                <span className={`px-2 py-1 rounded text-sm ${
+                  order.status === "Pendente" ? "bg-yellow-100 text-yellow-800" :
+                  order.status === "Aceito" ? "bg-green-100 text-green-800" :
+                  "bg-red-100 text-red-800"
+                }`}>
+                  {order.status}
+                </span>
+              </td>
+              <td className="px-4 py-3">R$ {order.total}</td>
+              <td className="px-4 py-3">
                 <button
-                  onClick={() => setSelectedOrder(order)}
-                  style={{ backgroundColor: theme.primaryColor }}
-                  className="px-3 py-1 text-white rounded"
+                  onClick={() => {
+                    setSelectedOrder(order);
+                    setShowOrderModal(true);
+                  }}
+                  className="text-blue-500 hover:text-blue-700 mr-2"
                 >
                   Ver Detalhes
                 </button>
+                {order.status === "Pendente" && (
+                  <button
+                    onClick={() => setOrders(prev => 
+                      prev.map(o => o.id === order.id ? {...o, status: "Cancelado"} : o)
+                    )}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    Cancelar
+                  </button>
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-
-      {/* MODAL */}
-      {selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded shadow-lg w-96">
-            <h3 className="text-lg font-bold mb-4">
-              Detalhes do Pedido #{selectedOrder.id}
-            </h3>
-            <p><strong>Data:</strong> {selectedOrder.data}</p>
-            <p><strong>Status:</strong> {selectedOrder.status}</p>
-            <h4 className="font-bold mt-4 mb-2">Produtos:</h4>
-            <ul className="mb-4">
-              {selectedOrder.produtos.map((p, idx) => (
-                <li key={idx}>🛍️ {p.nome} - R$ {p.preco}</li>
-              ))}
-            </ul>
-            <p className="font-semibold">💰 Total: R$ {selectedOrder.total}</p>
-
-            {selectedOrder.status === "Pendente" && (
-              <button
-                onClick={() => cancelarPedido(selectedOrder.id)}
-                style={{ backgroundColor: theme.secondaryColor }}
-                className="mt-4 px-4 py-2 text-white rounded"
-              >
-                Cancelar Pedido
-              </button>
-            )}
-
-            <button
-              onClick={() => setSelectedOrder(null)}
-              className="mt-4 ml-2 px-4 py-2 bg-gray-500 text-white rounded"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
     </div>
-  );
-};
+  </div>
+);
 
-// =============================
-// CLIENT - SOLICITAÇÕES DE SERVIÇO
-// =============================
-const ClientServiceRequests = ({ serviceRequests, setServiceRequests, services, theme }) => {
-  const [selectedRequest, setSelectedRequest] = React.useState(null);
-  const [newRequest, setNewRequest] = React.useState({
-    servico: "",
-    descricao: "",
-  });
+const ClientRequests = ({ requests, setRequests, services, loggedUser }) => {
+  const [newRequest, setNewRequest] = React.useState({ servico: "", descricao: "" });
 
   const submitRequest = () => {
-    if (!newRequest.servico || !newRequest.descricao) {
-      alert("Preencha todos os campos!");
-      return;
-    }
-
+    if (!newRequest.servico || !newRequest.descricao) return;
     const service = services.find(s => s.nome === newRequest.servico);
-    const request = {
+    setRequests(prev => [...prev, {
       id: Date.now(),
-      cliente: "João Silva",
+      cliente: loggedUser.nome,
+      clienteEmail: loggedUser.email,
       servico: newRequest.servico,
+      descricao: newRequest.descricao,
+      valor: service.valor,
       status: "Pendente",
       data: new Date().toISOString().split('T')[0],
-      descricao: newRequest.descricao,
-      valor: service?.valor || 0,
-    };
-
-    setServiceRequests(prev => [...prev, request]);
+      dataAgendamento: null
+    }]);
     setNewRequest({ servico: "", descricao: "" });
-    alert("Solicitação enviada!");
-  };
-
-  const cancelRequest = (id) => {
-    setServiceRequests(prev =>
-      prev.map(req => req.id === id ? { ...req, status: "Cancelado" } : req)
-    );
-    setSelectedRequest(null);
   };
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4" style={{ color: theme.primaryColor }}>
-        🛠️ Meus Serviços
-      </h2>
-
-      {/* Formulário para nova solicitação */}
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <h3 className="font-bold mb-4">Solicitar Novo Serviço</h3>
-        <select
-          value={newRequest.servico}
-          onChange={(e) => setNewRequest({ ...newRequest, servico: e.target.value })}
-          className="border px-2 py-1 mr-2 mb-2"
-        >
-          <option value="">Selecione um serviço</option>
-          {services.map(service => (
-            <option key={service.id} value={service.nome}>
-              {service.nome} - R$ {service.valor}
-            </option>
-          ))}
-        </select>
-        <textarea
-          placeholder="Descreva sua necessidade..."
-          value={newRequest.descricao}
-          onChange={(e) => setNewRequest({ ...newRequest, descricao: e.target.value })}
-          className="border px-2 py-1 w-full mb-2"
-          rows="3"
-        />
+      <h2 className="text-2xl font-bold mb-4">🛠 Minhas Solicitações</h2>
+      
+      {/* Formulário */}
+      <div className="bg-white p-4 rounded-lg shadow mb-6">
+        <h3 className="text-lg font-bold mb-3">Nova Solicitação</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <select
+            value={newRequest.servico}
+            onChange={(e) => setNewRequest({...newRequest, servico: e.target.value})}
+            className="border rounded px-3 py-2"
+          >
+            <option value="">Selecione um serviço</option>
+            {services.map(service => (
+              <option key={service.id} value={service.nome}>
+                {service.nome} - R$ {service.valor}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Descrição detalhada"
+            value={newRequest.descricao}
+            onChange={(e) => setNewRequest({...newRequest, descricao: e.target.value})}
+            className="border rounded px-3 py-2"
+          />
+        </div>
         <button
           onClick={submitRequest}
-          style={{ backgroundColor: theme.primaryColor }}
-          className="px-4 py-2 text-white rounded"
+          className="mt-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
         >
-          Enviar Solicitação
+          Solicitar Serviço
         </button>
       </div>
 
       {/* Lista de solicitações */}
-      <table className="min-w-full bg-white rounded shadow">
-        <thead style={{ backgroundColor: theme.secondaryColor, color: "white" }}>
-          <tr>
-            <th className="px-4 py-2">ID</th>
-            <th className="px-4 py-2">Serviço</th>
-            <th className="px-4 py-2">Data</th>
-            <th className="px-4 py-2">Status</th>
-            <th className="px-4 py-2">Ação</th>
-          </tr>
-        </thead>
-        <tbody>
-          {serviceRequests.map(request => (
-            <tr key={request.id} className="border-b">
-              <td className="px-4 py-2">{request.id}</td>
-              <td className="px-4 py-2">{request.servico}</td>
-              <td className="px-4 py-2">{request.data}</td>
-              <td className="px-4 py-2">{request.status}</td>
-              <td className="px-4 py-2">
-                <button
-                  onClick={() => setSelectedRequest(request)}
-                  style={{ backgroundColor: theme.primaryColor }}
-                  className="px-3 py-1 text-white rounded"
-                >
-                  Ver Detalhes
-                </button>
-              </td>
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left">Serviço</th>
+              <th className="px-4 py-3 text-left">Data</th>
+              <th className="px-4 py-3 text-left">Status</th>
+              <th className="px-4 py-3 text-left">Valor</th>
+              <th className="px-4 py-3 text-left">Ações</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Modal de detalhes */}
-      {selectedRequest && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded shadow-lg w-96">
-            <h3 className="text-lg font-bold mb-4">
-              Detalhes da Solicitação #{selectedRequest.id}
-            </h3>
-            <p><strong>Serviço:</strong> {selectedRequest.servico}</p>
-            <p><strong>Data:</strong> {selectedRequest.data}</p>
-            <p><strong>Status:</strong> {selectedRequest.status}</p>
-            <p><strong>Valor:</strong> R$ {selectedRequest.valor}</p>
-            <p><strong>Descrição:</strong> {selectedRequest.descricao}</p>
-
-            {selectedRequest.status === "Pendente" && (
-              <button
-                onClick={() => cancelRequest(selectedRequest.id)}
-                style={{ backgroundColor: theme.secondaryColor }}
-                className="mt-4 px-4 py-2 text-white rounded"
-              >
-                Cancelar Solicitação
-              </button>
-            )}
-
-            <button
-              onClick={() => setSelectedRequest(null)}
-              className="mt-4 ml-2 px-4 py-2 bg-gray-500 text-white rounded"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
+          </thead>
+          <tbody>
+            {requests.map((request) => (
+              <tr key={request.id} className="border-t">
+                <td className="px-4 py-3">{request.servico}</td>
+                <td className="px-4 py-3">{request.data}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-1 rounded text-sm ${
+                    request.status === "Pendente" ? "bg-yellow-100 text-yellow-800" :
+                    request.status === "Aceito" ? "bg-green-100 text-green-800" :
+                    "bg-red-100 text-red-800"
+                  }`}>
+                    {request.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3">R$ {request.valor}</td>
+                <td className="px-4 py-3">
+                  {request.status === "Pendente" && (
+                    <button
+                      onClick={() => setRequests(prev => 
+                        prev.map(r => r.id === request.id ? {...r, status: "Cancelado"} : r)
+                      )}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
 
-// =============================
-// ADMIN - USUÁRIOS
-// =============================
-const AdminUsers = ({ users, setUsers }) => {
-  const [editingUser, setEditingUser] = React.useState(null);
-  const [newUser, setNewUser] = React.useState({ nome: "", email: "", tipo: "cliente" });
-
-  const saveUser = () => {
-    if (editingUser) {
-      setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
-      setEditingUser(null);
-    } else {
-      if (!newUser.nome || !newUser.email) {
-        alert("Preencha todos os campos!");
-        return;
-      }
-      setUsers(prev => [...prev, { ...newUser, id: Date.now() }]);
-      setNewUser({ nome: "", email: "", tipo: "cliente" });
-    }
-  };
-
-  const deleteUser = (id) => {
-    if (confirm("Confirma exclusão?")) {
-      setUsers(prev => prev.filter(u => u.id !== id));
-    }
-  };
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-4">👥 Gerenciar Usuários</h2>
-      
-      {/* Formulário */}
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <h3 className="font-bold mb-4">
-          {editingUser ? "Editar Usuário" : "Novo Usuário"}
-        </h3>
+// Componentes Admin
+const AdminUsers = ({ users, newUser, setNewUser, addUser, deleteUser }) => (
+  <div>
+    <h2 className="text-2xl font-bold mb-4">👥 Gerenciar Usuários</h2>
+    
+    {/* Formulário */}
+    <div className="bg-white p-4 rounded-lg shadow mb-6">
+      <h3 className="text-lg font-bold mb-3">Novo Usuário</h3>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <input
           type="text"
           placeholder="Nome"
-          value={editingUser ? editingUser.nome : newUser.nome}
-          onChange={(e) => editingUser 
-            ? setEditingUser({...editingUser, nome: e.target.value})
-            : setNewUser({...newUser, nome: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          value={newUser.nome}
+          onChange={(e) => setNewUser({...newUser, nome: e.target.value})}
+          className="border rounded px-3 py-2"
         />
         <input
           type="email"
           placeholder="Email"
-          value={editingUser ? editingUser.email : newUser.email}
-          onChange={(e) => editingUser 
-            ? setEditingUser({...editingUser, email: e.target.value})
-            : setNewUser({...newUser, email: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          value={newUser.email}
+          onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+          className="border rounded px-3 py-2"
+        />
+        <input
+          type="password"
+          placeholder="Senha"
+          value={newUser.senha}
+          onChange={(e) => setNewUser({...newUser, senha: e.target.value})}
+          className="border rounded px-3 py-2"
         />
         <select
-          value={editingUser ? editingUser.tipo : newUser.tipo}
-          onChange={(e) => editingUser 
-            ? setEditingUser({...editingUser, tipo: e.target.value})
-            : setNewUser({...newUser, tipo: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          value={newUser.tipo}
+          onChange={(e) => setNewUser({...newUser, tipo: e.target.value})}
+          className="border rounded px-3 py-2"
         >
           <option value="cliente">Cliente</option>
           <option value="admin">Admin</option>
         </select>
-        <button
-          onClick={saveUser}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          {editingUser ? "Atualizar" : "Criar"}
-        </button>
-        {editingUser && (
-          <button
-            onClick={() => setEditingUser(null)}
-            className="bg-gray-500 text-white px-4 py-2 rounded ml-2"
-          >
-            Cancelar
-          </button>
-        )}
       </div>
+      <button
+        onClick={addUser}
+        className="mt-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+      >
+        Adicionar Usuário
+      </button>
+    </div>
 
-      {/* Tabela */}
-      <table className="min-w-full bg-white rounded shadow">
-        <thead className="bg-gray-200">
+    {/* Lista */}
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <table className="w-full">
+        <thead className="bg-gray-50">
           <tr>
-            <th>ID</th>
-            <th>Nome</th>
-            <th>Email</th>
-            <th>Tipo</th>
-            <th>Ações</th>
+            <th className="px-4 py-3 text-left">Nome</th>
+            <th className="px-4 py-3 text-left">Email</th>
+            <th className="px-4 py-3 text-left">Tipo</th>
+            <th className="px-4 py-3 text-left">Ações</th>
           </tr>
         </thead>
         <tbody>
-          {users.map(user => (
-            <tr key={user.id} className="border-b">
-              <td>{user.id}</td>
-              <td>{user.nome}</td>
-              <td>{user.email}</td>
-              <td>{user.tipo}</td>
-              <td>
-                <button
-                  onClick={() => setEditingUser(user)}
-                  className="bg-yellow-500 text-white px-2 py-1 rounded mr-2"
-                >
-                  Editar
-                </button>
+          {users.map((user) => (
+            <tr key={user.id} className="border-t">
+              <td className="px-4 py-3">{user.nome}</td>
+              <td className="px-4 py-3">{user.email}</td>
+              <td className="px-4 py-3">
+                <span className={`px-2 py-1 rounded text-sm ${
+                  user.tipo === "admin" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
+                }`}>
+                  {user.tipo}
+                </span>
+              </td>
+              <td className="px-4 py-3">
                 <button
                   onClick={() => deleteUser(user.id)}
-                  className="bg-red-500 text-white px-2 py-1 rounded"
+                  className="text-red-500 hover:text-red-700"
                 >
                   Excluir
                 </button>
@@ -697,123 +905,127 @@ const AdminUsers = ({ users, setUsers }) => {
         </tbody>
       </table>
     </div>
-  );
-};
+  </div>
+);
 
-// =============================
-// ADMIN - PRODUTOS
-// =============================
-const AdminProducts = ({ products, setProducts }) => {
-  const [editingProduct, setEditingProduct] = React.useState(null);
-  const [newProduct, setNewProduct] = React.useState({ nome: "", preco: "", categoria: "" });
-
-  const saveProduct = () => {
-    if (editingProduct) {
-      setProducts(prev => prev.map(p => p.id === editingProduct.id ? editingProduct : p));
-      setEditingProduct(null);
-    } else {
-      if (!newProduct.nome || !newProduct.preco || !newProduct.categoria) {
-        alert("Preencha todos os campos!");
-        return;
-      }
-      setProducts(prev => [...prev, { 
-        ...newProduct, 
-        id: Date.now(), 
-        preco: parseFloat(newProduct.preco) 
-      }]);
-      setNewProduct({ nome: "", preco: "", categoria: "" });
-    }
-  };
-
-  const deleteProduct = (id) => {
-    if (confirm("Confirma exclusão?")) {
-      setProducts(prev => prev.filter(p => p.id !== id));
-    }
-  };
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-4">📦 Gerenciar Produtos</h2>
-      
-      {/* Formulário */}
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <h3 className="font-bold mb-4">
-          {editingProduct ? "Editar Produto" : "Novo Produto"}
-        </h3>
+const AdminProducts = ({ products, newProduct, setNewProduct, addProduct, deleteProduct, editingProduct, setEditingProduct, updateProduct }) => (
+  <div>
+    <h2 className="text-2xl font-bold mb-4">📦 Gerenciar Produtos</h2>
+    
+    {/* Formulário */}
+    <div className="bg-white p-4 rounded-lg shadow mb-6">
+      <h3 className="text-lg font-bold mb-3">Novo Produto</h3>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <input
           type="text"
           placeholder="Nome"
-          value={editingProduct ? editingProduct.nome : newProduct.nome}
-          onChange={(e) => editingProduct 
-            ? setEditingProduct({...editingProduct, nome: e.target.value})
-            : setNewProduct({...newProduct, nome: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          value={newProduct.nome}
+          onChange={(e) => setNewProduct({...newProduct, nome: e.target.value})}
+          className="border rounded px-3 py-2"
         />
         <input
           type="number"
           placeholder="Preço"
-          value={editingProduct ? editingProduct.preco : newProduct.preco}
-          onChange={(e) => editingProduct 
-            ? setEditingProduct({...editingProduct, preco: parseFloat(e.target.value)})
-            : setNewProduct({...newProduct, preco: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          value={newProduct.preco}
+          onChange={(e) => setNewProduct({...newProduct, preco: e.target.value})}
+          className="border rounded px-3 py-2"
         />
         <input
           type="text"
           placeholder="Categoria"
-          value={editingProduct ? editingProduct.categoria : newProduct.categoria}
-          onChange={(e) => editingProduct 
-            ? setEditingProduct({...editingProduct, categoria: e.target.value})
-            : setNewProduct({...newProduct, categoria: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          value={newProduct.categoria}
+          onChange={(e) => setNewProduct({...newProduct, categoria: e.target.value})}
+          className="border rounded px-3 py-2"
         />
-        <button
-          onClick={saveProduct}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          {editingProduct ? "Atualizar" : "Criar"}
-        </button>
-        {editingProduct && (
-          <button
-            onClick={() => setEditingProduct(null)}
-            className="bg-gray-500 text-white px-4 py-2 rounded ml-2"
-          >
-            Cancelar
-          </button>
-        )}
+        <input
+          type="number"
+          placeholder="Estoque"
+          value={newProduct.estoque}
+          onChange={(e) => setNewProduct({...newProduct, estoque: e.target.value})}
+          className="border rounded px-3 py-2"
+        />
       </div>
+      <button
+        onClick={addProduct}
+        className="mt-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+      >
+        Adicionar Produto
+      </button>
+    </div>
 
-      {/* Tabela */}
-      <table className="min-w-full bg-white rounded shadow">
-        <thead className="bg-gray-200">
+    {/* Lista */}
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <table className="w-full">
+        <thead className="bg-gray-50">
           <tr>
-            <th>ID</th>
-            <th>Nome</th>
-            <th>Preço</th>
-            <th>Categoria</th>
-            <th>Ações</th>
+            <th className="px-4 py-3 text-left">Nome</th>
+            <th className="px-4 py-3 text-left">Preço</th>
+            <th className="px-4 py-3 text-left">Categoria</th>
+            <th className="px-4 py-3 text-left">Estoque</th>
+            <th className="px-4 py-3 text-left">Ações</th>
           </tr>
         </thead>
         <tbody>
-          {products.map(product => (
-            <tr key={product.id} className="border-b">
-              <td>{product.id}</td>
-              <td>{product.nome}</td>
-              <td>R$ {product.preco}</td>
-              <td>{product.categoria}</td>
-              <td>
+          {products.map((product) => (
+            <tr key={product.id} className="border-t">
+              <td className="px-4 py-3">
+                {editingProduct === product.id ? (
+                  <input
+                    type="text"
+                    defaultValue={product.nome}
+                    onBlur={(e) => updateProduct(product.id, {nome: e.target.value})}
+                    className="border rounded px-2 py-1"
+                  />
+                ) : (
+                  product.nome
+                )}
+              </td>
+              <td className="px-4 py-3">
+                {editingProduct === product.id ? (
+                  <input
+                    type="number"
+                    defaultValue={product.preco}
+                    onBlur={(e) => updateProduct(product.id, {preco: parseFloat(e.target.value)})}
+                    className="border rounded px-2 py-1 w-20"
+                  />
+                ) : (
+                  `R$ ${product.preco}`
+                )}
+              </td>
+              <td className="px-4 py-3">
+                {editingProduct === product.id ? (
+                  <input
+                    type="text"
+                    defaultValue={product.categoria}
+                    onBlur={(e) => updateProduct(product.id, {categoria: e.target.value})}
+                    className="border rounded px-2 py-1"
+                  />
+                ) : (
+                  product.categoria
+                )}
+              </td>
+              <td className="px-4 py-3">
+                {editingProduct === product.id ? (
+                  <input
+                    type="number"
+                    defaultValue={product.estoque}
+                    onBlur={(e) => updateProduct(product.id, {estoque: parseInt(e.target.value)})}
+                    className="border rounded px-2 py-1 w-16"
+                  />
+                ) : (
+                  product.estoque
+                )}
+              </td>
+              <td className="px-4 py-3">
                 <button
-                  onClick={() => setEditingProduct(product)}
-                  className="bg-yellow-500 text-white px-2 py-1 rounded mr-2"
+                  onClick={() => setEditingProduct(editingProduct === product.id ? null : product.id)}
+                  className="text-blue-500 hover:text-blue-700 mr-2"
                 >
-                  Editar
+                  {editingProduct === product.id ? "Salvar" : "Editar"}
                 </button>
                 <button
                   onClick={() => deleteProduct(product.id)}
-                  className="bg-red-500 text-white px-2 py-1 rounded"
+                  className="text-red-500 hover:text-red-700"
                 >
                   Excluir
                 </button>
@@ -823,218 +1035,138 @@ const AdminProducts = ({ products, setProducts }) => {
         </tbody>
       </table>
     </div>
-  );
-};
+  </div>
+);
 
-// =============================
-// ADMIN - PEDIDOS
-// =============================
-const AdminOrders = ({ orders, setOrders }) => {
-  const [selectedOrder, setSelectedOrder] = React.useState(null);
-
-  const atualizarStatus = (id, status) => {
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === id ? { ...order, status: status } : order
-      )
-    );
-  };
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-4">📋 Gerenciar Pedidos</h2>
-      <table className="min-w-full bg-white rounded shadow">
-        <thead className="bg-gray-200">
+const AdminOrders = ({ orders, setOrders, setShowOrderModal, setSelectedOrder }) => (
+  <div>
+    <h2 className="text-2xl font-bold mb-4">📋 Gerenciar Pedidos</h2>
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <table className="w-full">
+        <thead className="bg-gray-50">
           <tr>
-            <th>ID</th>
-            <th>Cliente</th>
-            <th>Data</th>
-            <th>Total</th>
-            <th>Status</th>
-            <th>Ações</th>
+            <th className="px-4 py-3 text-left">Pedido</th>
+            <th className="px-4 py-3 text-left">Cliente</th>
+            <th className="px-4 py-3 text-left">Data</th>
+            <th className="px-4 py-3 text-left">Status</th>
+            <th className="px-4 py-3 text-left">Total</th>
+            <th className="px-4 py-3 text-left">Ações</th>
           </tr>
         </thead>
         <tbody>
-          {orders.map((o) => (
-            <tr key={o.id} className="border-b">
-              <td>{o.id}</td>
-              <td>{o.cliente}</td>
-              <td>{o.data}</td>
-              <td>R$ {o.total}</td>
-              <td>{o.status}</td>
-              <td>
+          {orders.map((order) => (
+            <tr key={order.id} className="border-t">
+              <td className="px-4 py-3">#{order.id}</td>
+              <td className="px-4 py-3">{order.cliente}</td>
+              <td className="px-4 py-3">{order.data}</td>
+              <td className="px-4 py-3">
+                <span className={`px-2 py-1 rounded text-sm ${
+                  order.status === "Pendente" ? "bg-yellow-100 text-yellow-800" :
+                  order.status === "Aceito" ? "bg-green-100 text-green-800" :
+                  "bg-red-100 text-red-800"
+                }`}>
+                  {order.status}
+                </span>
+              </td>
+              <td className="px-4 py-3">R$ {order.total}</td>
+              <td className="px-4 py-3">
                 <button
-                  onClick={() => setSelectedOrder(o)}
-                  className="bg-blue-500 text-white px-2 py-1 rounded mr-2"
+                  onClick={() => {
+                    setSelectedOrder(order);
+                    setShowOrderModal(true);
+                  }}
+                  className="text-blue-500 hover:text-blue-700 mr-2"
                 >
-                  Ver Detalhes
+                  Detalhes
                 </button>
-                {o.status === "Pendente" && (
-                  <div className="inline-flex gap-1">
+                {order.status === "Pendente" && (
+                  <>
                     <button
-                      className="bg-green-500 text-white px-2 py-1 rounded"
-                      onClick={() => atualizarStatus(o.id, "Aceito")}
+                      onClick={() => setOrders(prev => 
+                        prev.map(o => o.id === order.id ? {...o, status: "Aceito"} : o)
+                      )}
+                      className="text-green-500 hover:text-green-700 mr-2"
                     >
                       Aceitar
                     </button>
                     <button
-                      className="bg-red-500 text-white px-2 py-1 rounded"
-                      onClick={() => atualizarStatus(o.id, "Rejeitado")}
+                      onClick={() => setOrders(prev => 
+                        prev.map(o => o.id === order.id ? {...o, status: "Rejeitado"} : o)
+                      )}
+                      className="text-red-500 hover:text-red-700"
                     >
                       Rejeitar
                     </button>
-                  </div>
+                  </>
                 )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-
-      {/* Modal de detalhes */}
-      {selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded shadow-lg w-96">
-            <h3 className="text-lg font-bold mb-4">
-              Detalhes do Pedido #{selectedOrder.id}
-            </h3>
-            <p><strong>Cliente:</strong> {selectedOrder.cliente}</p>
-            <p><strong>Data:</strong> {selectedOrder.data}</p>
-            <p><strong>Status:</strong> {selectedOrder.status}</p>
-            <h4 className="font-bold mt-4 mb-2">Produtos:</h4>
-            <ul className="mb-4">
-              {selectedOrder.produtos.map((p, idx) => (
-                <li key={idx}>• {p.nome} - R$ {p.preco}</li>
-              ))}
-            </ul>
-            <p className="font-semibold">💰 Total: R$ {selectedOrder.total}</p>
-            <button
-              onClick={() => setSelectedOrder(null)}
-              className="mt-4 px-4 py-2 bg-gray-500 text-white rounded"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
     </div>
-  );
-};
+  </div>
+);
 
-// =============================
-// ADMIN - SERVIÇOS
-// =============================
-const AdminServices = ({ services, setServices }) => {
-  const [editingService, setEditingService] = React.useState(null);
-  const [newService, setNewService] = React.useState({ nome: "", descricao: "", valor: "" });
-
-  const saveService = () => {
-    if (editingService) {
-      setServices(prev => prev.map(s => s.id === editingService.id ? editingService : s));
-      setEditingService(null);
-    } else {
-      if (!newService.nome || !newService.descricao || !newService.valor) {
-        alert("Preencha todos os campos!");
-        return;
-      }
-      setServices(prev => [...prev, { 
-        ...newService, 
-        id: Date.now(), 
-        valor: parseFloat(newService.valor) 
-      }]);
-      setNewService({ nome: "", descricao: "", valor: "" });
-    }
-  };
-
-  const deleteService = (id) => {
-    if (confirm("Confirma exclusão?")) {
-      setServices(prev => prev.filter(s => s.id !== id));
-    }
-  };
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-4">🛠️ Gerenciar Serviços</h2>
-      
-      {/* Formulário */}
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <h3 className="font-bold mb-4">
-          {editingService ? "Editar Serviço" : "Novo Serviço"}
-        </h3>
+const AdminServices = ({ services, newService, setNewService, addService, deleteService }) => (
+  <div>
+    <h2 className="text-2xl font-bold mb-4">🛠 Gerenciar Serviços</h2>
+    
+    {/* Formulário */}
+    <div className="bg-white p-4 rounded-lg shadow mb-6">
+      <h3 className="text-lg font-bold mb-3">Novo Serviço</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <input
           type="text"
-          placeholder="Nome"
-          value={editingService ? editingService.nome : newService.nome}
-          onChange={(e) => editingService 
-            ? setEditingService({...editingService, nome: e.target.value})
-            : setNewService({...newService, nome: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          placeholder="Nome do serviço"
+          value={newService.nome}
+          onChange={(e) => setNewService({...newService, nome: e.target.value})}
+          className="border rounded px-3 py-2"
         />
         <input
           type="text"
           placeholder="Descrição"
-          value={editingService ? editingService.descricao : newService.descricao}
-          onChange={(e) => editingService 
-            ? setEditingService({...editingService, descricao: e.target.value})
-            : setNewService({...newService, descricao: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          value={newService.descricao}
+          onChange={(e) => setNewService({...newService, descricao: e.target.value})}
+          className="border rounded px-3 py-2"
         />
         <input
           type="number"
           placeholder="Valor"
-          value={editingService ? editingService.valor : newService.valor}
-          onChange={(e) => editingService 
-            ? setEditingService({...editingService, valor: parseFloat(e.target.value)})
-            : setNewService({...newService, valor: e.target.value})
-          }
-          className="border px-2 py-1 mr-2 mb-2"
+          value={newService.valor}
+          onChange={(e) => setNewService({...newService, valor: e.target.value})}
+          className="border rounded px-3 py-2"
         />
-        <button
-          onClick={saveService}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          {editingService ? "Atualizar" : "Criar"}
-        </button>
-        {editingService && (
-          <button
-            onClick={() => setEditingService(null)}
-            className="bg-gray-500 text-white px-4 py-2 rounded ml-2"
-          >
-            Cancelar
-          </button>
-        )}
       </div>
+      <button
+        onClick={addService}
+        className="mt-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+      >
+        Adicionar Serviço
+      </button>
+    </div>
 
-      {/* Tabela */}
-      <table className="min-w-full bg-white rounded shadow">
-        <thead className="bg-gray-200">
+    {/* Lista */}
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <table className="w-full">
+        <thead className="bg-gray-50">
           <tr>
-            <th>ID</th>
-            <th>Nome</th>
-            <th>Descrição</th>
-            <th>Valor</th>
-            <th>Ações</th>
+            <th className="px-4 py-3 text-left">Nome</th>
+            <th className="px-4 py-3 text-left">Descrição</th>
+            <th className="px-4 py-3 text-left">Valor</th>
+            <th className="px-4 py-3 text-left">Ações</th>
           </tr>
         </thead>
         <tbody>
-          {services.map(service => (
-            <tr key={service.id} className="border-b">
-              <td>{service.id}</td>
-              <td>{service.nome}</td>
-              <td>{service.descricao}</td>
-              <td>R$ {service.valor}</td>
-              <td>
-                <button
-                  onClick={() => setEditingService(service)}
-                  className="bg-yellow-500 text-white px-2 py-1 rounded mr-2"
-                >
-                  Editar
-                </button>
+          {services.map((service) => (
+            <tr key={service.id} className="border-t">
+              <td className="px-4 py-3">{service.nome}</td>
+              <td className="px-4 py-3">{service.descricao}</td>
+              <td className="px-4 py-3">R$ {service.valor}</td>
+              <td className="px-4 py-3">
                 <button
                   onClick={() => deleteService(service.id)}
-                  className="bg-red-500 text-white px-2 py-1 rounded"
+                  className="text-red-500 hover:text-red-700"
                 >
                   Excluir
                 </button>
@@ -1044,203 +1176,236 @@ const AdminServices = ({ services, setServices }) => {
         </tbody>
       </table>
     </div>
-  );
-};
+  </div>
+);
 
-// =============================
-// ADMIN - SOLICITAÇÕES
-// =============================
-const AdminRequests = ({ serviceRequests, setServiceRequests }) => {
-  const [selectedRequest, setSelectedRequest] = React.useState(null);
-
-  const updateRequestStatus = (id, status) => {
-    setServiceRequests(prev =>
-      prev.map(req => req.id === id ? { ...req, status } : req)
-    );
-    setSelectedRequest(null);
-  };
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-4">📝 Gerenciar Solicitações de Serviço</h2>
-      
-      <table className="min-w-full bg-white rounded shadow">
-        <thead className="bg-gray-200">
+const AdminRequests = ({ serviceRequests, setServiceRequests, setShowRequestModal, setSelectedRequest }) => (
+  <div>
+    <h2 className="text-2xl font-bold mb-4">📝 Gerenciar Solicitações</h2>
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <table className="w-full">
+        <thead className="bg-gray-50">
           <tr>
-            <th>ID</th>
-            <th>Cliente</th>
-            <th>Serviço</th>
-            <th>Data</th>
-            <th>Status</th>
-            <th>Valor</th>
-            <th>Ações</th>
+            <th className="px-4 py-3 text-left">Cliente</th>
+            <th className="px-4 py-3 text-left">Serviço</th>
+            <th className="px-4 py-3 text-left">Data</th>
+            <th className="px-4 py-3 text-left">Status</th>
+            <th className="px-4 py-3 text-left">Valor</th>
+            <th className="px-4 py-3 text-left">Ações</th>
           </tr>
         </thead>
         <tbody>
-          {serviceRequests.map(request => (
-            <tr key={request.id} className="border-b">
-              <td>{request.id}</td>
-              <td>{request.cliente}</td>
-              <td>{request.servico}</td>
-              <td>{request.data}</td>
-              <td>{request.status}</td>
-              <td>R$ {request.valor}</td>
-              <td>
+          {serviceRequests.map((request) => (
+            <tr key={request.id} className="border-t">
+              <td className="px-4 py-3">{request.cliente}</td>
+              <td className="px-4 py-3">{request.servico}</td>
+              <td className="px-4 py-3">{request.data}</td>
+              <td className="px-4 py-3">
+                <span className={`px-2 py-1 rounded text-sm ${
+                  request.status === "Pendente" ? "bg-yellow-100 text-yellow-800" :
+                  request.status === "Aceito" ? "bg-green-100 text-green-800" :
+                  "bg-red-100 text-red-800"
+                }`}>
+                  {request.status}
+                </span>
+              </td>
+              <td className="px-4 py-3">R$ {request.valor}</td>
+              <td className="px-4 py-3">
                 <button
-                  onClick={() => setSelectedRequest(request)}
-                  className="bg-blue-500 text-white px-2 py-1 rounded mr-2"
+                  onClick={() => {
+                    setSelectedRequest(request);
+                    setShowRequestModal(true);
+                  }}
+                  className="text-blue-500 hover:text-blue-700 mr-2"
                 >
-                  Ver Detalhes
+                  Detalhes
                 </button>
                 {request.status === "Pendente" && (
-                  <div className="inline-flex gap-1">
+                  <>
                     <button
-                      onClick={() => updateRequestStatus(request.id, "Aceito")}
-                      className="bg-green-500 text-white px-2 py-1 rounded"
+                      onClick={() => setServiceRequests(prev => 
+                        prev.map(r => r.id === request.id ? {...r, status: "Aceito"} : r)
+                      )}
+                      className="text-green-500 hover:text-green-700 mr-2"
                     >
                       Aceitar
                     </button>
                     <button
-                      onClick={() => updateRequestStatus(request.id, "Rejeitado")}
-                      className="bg-red-500 text-white px-2 py-1 rounded"
+                      onClick={() => setServiceRequests(prev => 
+                        prev.map(r => r.id === request.id ? {...r, status: "Rejeitado"} : r)
+                      )}
+                      className="text-red-500 hover:text-red-700"
                     >
                       Rejeitar
                     </button>
-                  </div>
+                  </>
                 )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-
-      {/* Modal de detalhes */}
-      {selectedRequest && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded shadow-lg w-96">
-            <h3 className="text-lg font-bold mb-4">
-              Detalhes da Solicitação #{selectedRequest.id}
-            </h3>
-            <p><strong>Cliente:</strong> {selectedRequest.cliente}</p>
-            <p><strong>Serviço:</strong> {selectedRequest.servico}</p>
-            <p><strong>Data:</strong> {selectedRequest.data}</p>
-            <p><strong>Status:</strong> {selectedRequest.status}</p>
-            <p><strong>Valor:</strong> R$ {selectedRequest.valor}</p>
-            <p><strong>Descrição:</strong> {selectedRequest.descricao}</p>
-            
-            {selectedRequest.status === "Pendente" && (
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={() => updateRequestStatus(selectedRequest.id, "Aceito")}
-                  className="bg-green-500 text-white px-4 py-2 rounded"
-                >
-                  Aceitar
-                </button>
-                <button
-                  onClick={() => updateRequestStatus(selectedRequest.id, "Rejeitado")}
-                  className="bg-red-500 text-white px-4 py-2 rounded"
-                >
-                  Rejeitar
-                </button>
-              </div>
-            )}
-            
-            <button
-              onClick={() => setSelectedRequest(null)}
-              className="mt-4 px-4 py-2 bg-gray-500 text-white rounded"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
     </div>
-  );
-};
+  </div>
+);
 
-// =============================
-// ADMIN - CONFIGURAÇÕES
-// =============================
 const AdminConfig = ({ systemConfig, setSystemConfig }) => {
-  const handleFile = (e, type) => {
+  const handleFileUpload = (e, type) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () =>
-        setSystemConfig((prev) => ({ ...prev, [type]: reader.result }));
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSystemConfig(prev => ({ ...prev, [type]: reader.result }));
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
     <div>
-      <h2 className="text-lg font-bold mb-4">⚙️ Configurações do Sistema</h2>
-
-      <div className="bg-white p-6 rounded shadow">
-        <div className="mb-4">
-          <label className="block font-bold mb-2">Nome do sistema:</label>
-          <input
-            type="text"
-            value={systemConfig.name}
-            onChange={(e) =>
-              setSystemConfig({ ...systemConfig, name: e.target.value })
-            }
-            className="border px-3 py-2 w-full rounded"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block font-bold mb-2">Cor primária:</label>
-          <input
-            type="color"
-            value={systemConfig.primaryColor}
-            onChange={(e) =>
-              setSystemConfig({ ...systemConfig, primaryColor: e.target.value })
-            }
-            className="border rounded"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block font-bold mb-2">Cor secundária:</label>
-          <input
-            type="color"
-            value={systemConfig.secondaryColor}
-            onChange={(e) =>
-              setSystemConfig({ ...systemConfig, secondaryColor: e.target.value })
-            }
-            className="border rounded"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block font-bold mb-2">Upload Logo (Header):</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => handleFile(e, "logo")}
-            className="border px-3 py-2 w-full rounded"
-          />
-          {systemConfig.logo && (
-            <img src={systemConfig.logo} alt="Preview" className="mt-2 h-16" />
-          )}
-        </div>
-
-        <div className="mb-4">
-          <label className="block font-bold mb-2">Upload Favicon:</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => handleFile(e, "favicon")}
-            className="border px-3 py-2 w-full rounded"
-          />
-          {systemConfig.favicon && (
-            <img src={systemConfig.favicon} alt="Preview" className="mt-2 h-8" />
-          )}
+      <h2 className="text-2xl font-bold mb-4">⚙ Configurações do Sistema</h2>
+      <div className="bg-white p-6 rounded-lg shadow">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium mb-2">Nome do Sistema</label>
+            <input
+              type="text"
+              value={systemConfig.name}
+              onChange={(e) => setSystemConfig(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full border rounded px-3 py-2"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-2">Cor Primária</label>
+            <input
+              type="color"
+              value={systemConfig.primaryColor}
+              onChange={(e) => setSystemConfig(prev => ({ ...prev, primaryColor: e.target.value }))}
+              className="w-full border rounded px-3 py-2 h-10"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-2">Cor Secundária</label>
+            <input
+              type="color"
+              value={systemConfig.secondaryColor}
+              onChange={(e) => setSystemConfig(prev => ({ ...prev, secondaryColor: e.target.value }))}
+              className="w-full border rounded px-3 py-2 h-10"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-2">Logo</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleFileUpload(e, 'logo')}
+              className="w-full border rounded px-3 py-2"
+            />
+            {systemConfig.logo && (
+              <img src={systemConfig.logo} alt="Logo" className="mt-2 h-16 rounded" />
+            )}
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-2">Favicon</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleFileUpload(e, 'favicon')}
+              className="w-full border rounded px-3 py-2"
+            />
+            {systemConfig.favicon && (
+              <img src={systemConfig.favicon} alt="Favicon" className="mt-2 h-8 rounded" />
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
+// Modals
+const OrderModal = ({ order, onClose }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-bold">Detalhes do Pedido #{order.id}</h3>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+      </div>
+      
+      <div className="space-y-3">
+        <p><strong>Cliente:</strong> {order.cliente}</p>
+        <p><strong>Email:</strong> {order.clienteEmail}</p>
+        <p><strong>Data:</strong> {order.data}</p>
+        <p><strong>Status:</strong> <span className={`px-2 py-1 rounded text-sm ${
+          order.status === "Pendente" ? "bg-yellow-100 text-yellow-800" :
+          order.status === "Aceito" ? "bg-green-100 text-green-800" :
+          "bg-red-100 text-red-800"
+        }`}>{order.status}</span></p>
+        
+        <div>
+          <strong>Produtos:</strong>
+          <ul className="mt-2 space-y-1">
+            {order.produtos.map((produto, index) => (
+              <li key={index} className="flex justify-between">
+                <span>{produto.nome} (x{produto.quantidade})</span>
+                <span>R$ {produto.preco}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        
+        <div className="border-t pt-3">
+          <p className="text-lg font-bold">Total: R$ {order.total}</p>
+        </div>
+      </div>
+      
+      <button
+        onClick={onClose}
+        className="mt-4 w-full bg-gray-500 text-white py-2 rounded hover:bg-gray-600"
+      >
+        Fechar
+      </button>
+    </div>
+  </div>
+);
+
+const RequestModal = ({ request, onClose }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-bold">Detalhes da Solicitação #{request.id}</h3>
+        <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+      </div>
+      
+      <div className="space-y-3">
+        <p><strong>Cliente:</strong> {request.cliente}</p>
+        <p><strong>Email:</strong> {request.clienteEmail}</p>
+        <p><strong>Serviço:</strong> {request.servico}</p>
+        <p><strong>Data da Solicitação:</strong> {request.data}</p>
+        <p><strong>Status:</strong> <span className={`px-2 py-1 rounded text-sm ${
+          request.status === "Pendente" ? "bg-yellow-100 text-yellow-800" :
+          request.status === "Aceito" ? "bg-green-100 text-green-800" :
+          "bg-red-100 text-red-800"
+        }`}>{request.status}</span></p>
+        {request.dataAgendamento && (
+          <p><strong>Data Agendada:</strong> {request.dataAgendamento}</p>
+        )}
+        <p><strong>Descrição:</strong> {request.descricao}</p>
+        <p><strong>Valor:</strong> R$ {request.valor}</p>
+      </div>
+      
+      <button
+        onClick={onClose}
+        className="mt-4 w-full bg-gray-500 text-white py-2 rounded hover:bg-gray-600"
+      >
+        Fechar
+      </button>
+    </div>
+  </div>
+);
 
 export default App;
