@@ -374,15 +374,7 @@ function App() {
             </button>
           </div>
           
-          {/* Usuários de teste */}
-          <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-            <h4 className="font-medium text-gray-700 mb-2">👥 Usuários de Teste:</h4>
-            <div className="text-sm text-gray-600 space-y-1">
-              <p><strong>Admin:</strong> admin@email.com / admin123</p>
-              <p><strong>Cliente:</strong> joao@email.com / 123456</p>
-              <p><strong>Cliente:</strong> pedro@email.com / pedro123</p>
-            </div>
-          </div>
+          
         </div>
       </div>
     );
